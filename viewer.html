@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes Export Map</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc; --hover: #f0eee9;
+    --accent: #2e5bd8;
+    --exported: #2f8f5b; --pending: #3f6fd1; --newnotes: #c7851a; --queued: #7c4ddb; --failed: #d23c3c; --excluded: #a3a19b;
+    --exported-bg: #e6f3ec; --pending-bg: #e8eefb; --newnotes-bg: #fbf1e0; --queued-bg: #f0e9fc; --failed-bg: #fbe7e7; --excluded-bg: #efeeea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --panel: #1e1e1c; --ink: #ecebe7; --muted: #9c9a94; --line: #2f2e2b; --hover: #262624;
+      --accent: #7c9cf0;
+      --exported: #5cc58b; --pending: #7c9cf0; --newnotes: #e6a94a; --queued: #a98af0; --failed: #f07171; --excluded: #75736e;
+      --exported-bg: #1d3226; --pending-bg: #1f2740; --newnotes-bg: #3a2d16; --queued-bg: #2c2340; --failed-bg: #3d1f1f; --excluded-bg: #262624;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151514; --panel: #1e1e1c; --ink: #ecebe7; --muted: #9c9a94; --line: #2f2e2b; --hover: #262624;
+    --accent: #7c9cf0;
+    --exported: #5cc58b; --pending: #7c9cf0; --newnotes: #e6a94a; --queued: #a98af0; --failed: #f07171; --excluded: #75736e;
+    --exported-bg: #1d3226; --pending-bg: #1f2740; --newnotes-bg: #3a2d16; --queued-bg: #2c2340; --failed-bg: #3d1f1f; --excluded-bg: #262624;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  button { font: inherit; color: inherit; }
+  header { padding: 20px 24px 12px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .mode { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); }
+  .mode button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); }
+  .mode button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 24px 12px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 120px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 24px 12px; }
+  .toolbar input { flex: 1 1 220px; min-width: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); font: inherit; }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  .btn:hover { background: var(--hover); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 14px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel);
+    border-radius: 999px; padding: 4px 10px 4px 8px; cursor: pointer; font-size: 12.5px; }
+  .chip[aria-pressed="true"] { border-color: var(--ink); }
+  .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--c); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 0 24px 32px; align-items: start; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } aside { position: static !important; } }
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 0; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px; cursor: pointer; min-width: 0; }
+  .row:hover { background: var(--hover); }
+  .row.sel { background: var(--hover); outline: 1px solid var(--line); }
+  .twisty { width: 16px; flex: none; color: var(--muted); text-align: center; font-size: 11px; transition: transform .12s; }
+  .twisty.open { transform: rotate(90deg); }
+  .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder > .row .name { font-weight: 560; }
+  .meta { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pill { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; color: var(--c); background: var(--cb); white-space: nowrap; }
+  .count { min-width: 44px; text-align: right; }
+  .bar { width: 56px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; flex: none; }
+  .bar i { display: block; height: 100%; background: var(--exported); }
+  .kids { margin-left: 16px; border-left: 1px solid var(--line); padding-left: 4px; }
+  .act { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 2px 8px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .act:hover { border-color: var(--queued); color: var(--queued); }
+  .act.on { border-color: var(--queued); color: var(--queued); background: var(--queued-bg); }
+  aside { position: sticky; top: 12px; display: grid; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  .card h3 { margin: 0 0 4px; font-size: 16px; word-break: break-word; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0; font-size: 13px; }
+  dt { color: var(--muted); } dd { margin: 0; word-break: break-word; }
+  ul.files { margin: 8px 0 0; padding-left: 18px; font-size: 13px; max-height: 220px; overflow: auto; }
+  code, pre { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+  .empty { color: var(--muted); font-size: 13px; }
+  .editbanner { display: none; margin: 0 24px 12px; padding: 8px 12px; border-radius: 8px; background: var(--queued-bg); color: var(--queued); font-size: 13px; }
+  body.editing .editbanner { display: block; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 520px) {
+    header, .stats, .toolbar, .chips { padding-left: 16px; padding-right: 16px; }
+    main { padding: 0 16px 24px; }
+    .bar, .meta.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Notes Export Map</h1>
+    <div class="sub" id="freshness">Loading…</div>
+  </div>
+  <div class="mode" role="group" aria-label="Mode">
+    <button id="readBtn" aria-pressed="true">Read</button>
+    <button id="editBtn" aria-pressed="false">Edit</button>
+  </div>
+</header>
+<div class="stats" id="stats"></div>
+<div class="editbanner">Edit mode: queue folders or notes for re-export. Queuing a note re-exports its whole folder. Changes save immediately to <code>output/queue.json</code>.</div>
+<div class="toolbar">
+  <input id="search" type="search" placeholder="Search folders and notes…" aria-label="Search">
+  <button class="btn" id="expandAll">Expand all</button>
+  <button class="btn" id="collapseAll">Collapse all</button>
+  <button class="btn" id="refresh">Refresh</button>
+</div>
+<div class="chips" id="chips"></div>
+<main>
+  <div class="tree" id="tree" role="tree"></div>
+  <aside>
+    <div class="card" id="details"><h2>Details</h2><p class="empty">Select a folder or note.</p></div>
+    <div class="card" id="queueCard"></div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const STATUS = {
+  exported: { label: "Exported", c: "--exported" },
+  newnotes: { label: "New notes", c: "--newnotes" },
+  pending:  { label: "Not exported", c: "--pending" },
+  queued:   { label: "Queued", c: "--queued" },
+  failed:   { label: "Failed", c: "--failed" },
+  excluded: { label: "Excluded", c: "--excluded" },
+};
+const PRIORITY = ["failed", "queued", "newnotes", "pending", "exported", "excluded"];
+
+let data = null, model = null, byKey = new Map();
+let editing = false, selected = null, query = "", filter = null;
+const open = new Set(JSON.parse(safeGet("open") || "[]"));
+
+function safeGet(k) { try { return localStorage.getItem("nem:" + k); } catch { return null; } }
+function safeSet(k, v) { try { localStorage.setItem("nem:" + k, v); } catch {} }
+const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function counter(titles) { const m = new Map(); titles.forEach(t => m.set(t, (m.get(t) || 0) + 1)); return m; }
+
+/* Build a view model: every folder and note with a status. */
+function build() {
+  const { tree, manifest, queue, skipped } = data;
+  byKey = new Map();
+  const mk = (n, excluded) => {
+    const key = n.path.join("/");
+    const entry = manifest[key];
+    const done = entry && (entry.status === "done" ? entry : entry.last_done);
+    const queuedEntry = queue[key];
+    // which notes have a PDF from the last successful export
+    let exportedLeft = null;
+    if (done) exportedLeft = done.notes ? counter(done.notes.map(x => x[0])) : null;
+    const legacyAll = done && !done.notes && (done.count || 0) >= n.notes.length;
+    const notes = [...n.notes].sort((a, b) => natural(a[0], b[0])).map(([title, date]) => {
+      // hasPdf: a PDF from the last successful export is in output/ (independent of being queued)
+      let hasPdf = !excluded && !!legacyAll;
+      if (!excluded && exportedLeft && exportedLeft.get(title) > 0) { hasPdf = true; exportedLeft.set(title, exportedLeft.get(title) - 1); }
+      const status = excluded ? "excluded" : queuedEntry ? "queued" : hasPdf ? "exported"
+        : entry && entry.status === "failed" ? "failed" : "pending";
+      return { kind: "note", title, date, status, hasPdf, folderKey: key };
+    });
+    const node = {
+      kind: "folder", name: n.path.length ? n.path[n.path.length - 1] : "Folders home screen", key,
+      path: n.path, excluded, entry, queued: !!queuedEntry, queuedEntry, notes,
+      children: n.children.map(c => mk(c, excluded)).sort((a, b) => natural(a.name, b.name)),
+    };
+    // own status (for folders that hold notes)
+    if (excluded) node.own = notes.length ? "excluded" : null;
+    else if (!notes.length) node.own = null;
+    else if (node.queued) node.own = "queued";
+    else if (entry && entry.status === "failed") node.own = "failed";
+    else if (!done) node.own = "pending";
+    else node.own = notes.some(x => !x.hasPdf) ? "newnotes" : "exported";
+    // rolled-up counts over the subtree
+    node.total = notes.filter(x => x.status !== "excluded").length;
+    node.done = notes.filter(x => x.hasPdf).length;
+    node.statuses = new Set(node.own ? [node.own] : []);
+    notes.forEach(x => node.statuses.add(x.status));
+    node.children.forEach(c => { node.total += c.total; node.done += c.done; c.statuses.forEach(s => node.statuses.add(s)); });
+    node.status = node.own || PRIORITY.find(s => node.statuses.has(s)) || null;
+    byKey.set(key, node);
+    return node;
+  };
+  const root = mk(tree, false);
+  // home-screen notes are excluded from exports
+  root.notes.forEach(x => x.status = "excluded");
+  root.own = null; root.statuses = new Set(["excluded"]); root.total = 0; root.done = 0;
+  root.children.forEach(c => { root.total += c.total; root.done += c.done; c.statuses.forEach(s => root.statuses.add(s)); });
+  // folders the scripts skip entirely (never scanned)
+  skipped.forEach(name => root.children.push({ kind: "folder", name, key: name, path: [name], excluded: true, notes: [],
+    children: [], own: "excluded", status: "excluded", total: 0, done: 0, statuses: new Set(["excluded"]), skippedFolder: true }));
+  root.children.sort((a, b) => natural(a.name, b.name));
+  return root;
+}
+
+function allNodes(n, out = []) { out.push(n); n.notes.forEach(x => out.push(x)); n.children.forEach(c => allNodes(c, out)); return out; }
+
+/* ---------- rendering ---------- */
+function matches(n) {
+  const text = n.kind === "note" ? n.title + " " + n.folderKey : n.key || n.name;
+  const q = !query || text.toLowerCase().includes(query);
+  const f = !filter || (n.kind === "note" ? n.status === filter : n.statuses.has(filter));
+  return q && f;
+}
+function visible(n) {  // a folder is shown if it or anything inside it matches
+  if (n.kind === "note") return matches(n);
+  return matches(n) || n.notes.some(matches) || n.children.some(visible);
+}
+
+function pill(status) {
+  const s = STATUS[status]; if (!s) return "";
+  return `<span class="pill" style="--c:var(${s.c});--cb:var(${s.c}-bg)">${s.label}</span>`;
+}
+function dot(status) { const s = STATUS[status]; return s ? `<span class="dot" style="--c:var(${s.c})" aria-hidden="true"></span>` : `<span class="dot" style="--c:var(--line)"></span>`; }
+
+function actionFor(n) {
+  if (!editing) return "";
+  if (n.kind === "note") {
+    const f = byKey.get(n.folderKey);
+    if (!f || f.excluded) return "";
+    return f.queued
+      ? `<button class="act on" data-act="remove" data-paths="${esc(JSON.stringify([f.key]))}">Unqueue folder</button>`
+      : `<button class="act" data-act="add" data-note="${esc(n.title)}" data-paths="${esc(JSON.stringify([f.key]))}">Queue re-export</button>`;
+  }
+  if (n.excluded) return "";
+  const targets = []; (function walk(x) { if (x.notes.length && x.path.length) targets.push(x); x.children.forEach(walk); })(n);
+  if (!targets.length) return "";
+  const allQueued = targets.every(t => t.queued);
+  const paths = esc(JSON.stringify(targets.map(t => t.key)));
+  const what = targets.length === 1 && targets[0] === n ? "folder"
+    : `${targets.length} folder${targets.length === 1 ? "" : "s"} inside`;
+  return allQueued
+    ? `<button class="act on" data-act="remove" data-paths="${paths}">Unqueue ${what}</button>`
+    : `<button class="act" data-act="add" data-paths="${paths}">Queue ${what}</button>`;
+}
+
+function renderNode(n, depth) {
+  if (!visible(n)) return "";
+  if (n.kind === "note") {
+    const id = "n:" + n.folderKey + "\u0000" + n.title + "\u0000" + n.date;
+    return `<div class="note" role="treeitem"><div class="row${selected === id ? " sel" : ""}" data-sel="${esc(id)}">
+      <span class="twisty"></span>${dot(n.status)}<span class="name">${esc(n.title)}</span>
+      <span class="meta hide-sm">${esc(n.date)}</span>${actionFor(n)}</div></div>`;
+  }
+  const isOpen = open.has(n.key) || (query && depth < 8) || (filter && depth < 8);
+  const hasKids = n.children.length || n.notes.length;
+  const pct = n.total ? Math.round(100 * n.done / n.total) : 0;
+  const id = "f:" + n.key;
+  const kids = isOpen ? n.notes.map(x => renderNode(x, depth + 1)).join("") + n.children.map(c => renderNode(c, depth + 1)).join("") : "";
+  return `<div class="folder" role="treeitem" aria-expanded="${!!isOpen}">
+    <div class="row${selected === id ? " sel" : ""}" data-sel="${esc(id)}" data-toggle="${esc(n.key)}">
+      <span class="twisty${isOpen ? " open" : ""}">${hasKids ? "▶" : ""}</span>${dot(n.status)}
+      <span class="name">${esc(n.name)}</span>${n.own ? pill(n.own) : ""}
+      ${n.total ? `<span class="meta count">${n.done}/${n.total}</span><span class="bar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ""}
+      ${actionFor(n)}
+    </div>${isOpen && hasKids ? `<div class="kids" role="group">${kids}</div>` : ""}</div>`;
+}
+
+function render() {
+  model = build();
+  const all = allNodes(model);
+  const notes = all.filter(x => x.kind === "note");
+  const inScope = notes.filter(x => x.status !== "excluded");
+  const count = s => inScope.filter(x => x.status === s).length;
+  const queuedFolders = Object.keys(data.queue).length;
+  const failedFolders = Object.values(data.manifest).filter(e => e.status === "failed").length;
+  document.getElementById("stats").innerHTML = [
+    [`${inScope.filter(x => x.hasPdf).length} / ${inScope.length}`, "notes exported"],
+    [inScope.filter(x => !x.hasPdf).length, "notes not exported"],
+    [queuedFolders, "folders queued"],
+    [failedFolders, "folders failed"],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+
+  const statusCounts = {};  // notes per status ("New notes" counts folders: it's a folder-level state)
+  notes.forEach(x => statusCounts[x.status] = (statusCounts[x.status] || 0) + 1);
+  statusCounts.newnotes = all.filter(x => x.kind === "folder" && x.own === "newnotes").length;
+  document.getElementById("chips").innerHTML = Object.entries(STATUS).map(([k, s]) =>
+    `<button class="chip" data-filter="${k}" aria-pressed="${filter === k}">${dot(k)}${s.label}<span class="n">${statusCounts[k] || 0}</span></button>`).join("");
+
+  document.getElementById("tree").innerHTML =
+    model.children.map(c => renderNode(c, 0)).join("") + renderNode({ ...model, name: "Folders home screen (not exported)",
+      key: "__home", children: [], own: "excluded", status: "excluded", total: 0 }, 0) ||
+    `<p class="empty" style="padding:12px">Nothing matches.</p>`;
+  renderDetails();
+  renderQueue();
+  document.getElementById("freshness").textContent =
+    `Tablet scanned ${fmt(data.scanned_at)} · manifest updated ${fmt(data.manifest_at)}`;
+}
+
+function fmt(iso) { if (!iso) return "never"; const d = new Date(iso); return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+
+function renderDetails() {
+  const el = document.getElementById("details");
+  if (!selected) { el.innerHTML = `<h2>Details</h2><p class="empty">Select a folder or note.</p>`; return; }
+  if (selected.startsWith("n:")) {
+    const [fk, title, date] = selected.slice(2).split("\u0000");
+    const f = byKey.get(fk); const n = f && f.notes.find(x => x.title === title && x.date === date);
+    if (!n) { el.innerHTML = `<h2>Details</h2><p class="empty">No longer in the tree.</p>`; return; }
+    const done = f.entry && (f.entry.status === "done" ? f.entry : f.entry.last_done);
+    el.innerHTML = `<h2>Note</h2><h3>${esc(n.title)}</h3>${pill(n.status)}
+      <dl><dt>Folder</dt><dd>${esc(fk || "Folders home screen")}</dd><dt>Date on tablet</dt><dd>${esc(n.date)}</dd>
+      ${done ? `<dt>Folder exported</dt><dd>${fmt(done.at)}</dd>` : ""}
+      ${f.queuedEntry ? `<dt>Queued</dt><dd>${fmt(f.queuedEntry.queued_at)}${f.queuedEntry.notes.length ? " — for " + esc(f.queuedEntry.notes.join(", ")) : ""}</dd>` : ""}</dl>
+      ${n.status === "exported" ? `<pre>output/${esc(fk)}/</pre>` : ""}`;
+    return;
+  }
+  const f = byKey.get(selected.slice(2)) || (selected === "f:__home" ? model : null);
+  if (!f) { el.innerHTML = `<h2>Details</h2><p class="empty">No longer in the tree.</p>`; return; }
+  const e = f.entry; const done = e && (e.status === "done" ? e : e.last_done);
+  el.innerHTML = `<h2>Folder</h2><h3>${esc(f.path.length ? f.key : "Folders home screen")}</h3>${f.own ? pill(f.own) : ""}
+    <dl>
+      ${f.skippedFolder ? `<dt>Note</dt><dd>Skipped by the scripts (skip_top_level in config.json).</dd>` : ""}
+      ${f.path.length === 0 ? `<dt>Note</dt><dd>Loose notes here are never exported.</dd>` : ""}
+      <dt>Notes here</dt><dd>${f.notes.length}</dd>
+      <dt>Subfolders</dt><dd>${f.children.length}</dd>
+      ${f.total ? `<dt>Exported (incl. subfolders)</dt><dd>${f.done} / ${f.total}</dd>` : ""}
+      ${done ? `<dt>Last export</dt><dd>${fmt(done.at)} · ${done.count} PDFs${done.seconds ? ` · ${done.seconds}s` : ""}</dd>` : ""}
+      ${e && e.status === "failed" ? `<dt>Failed</dt><dd>${fmt(e.at)}: ${esc(e.error)}</dd><dt>Debug files</dt><dd><code>${esc(e.artifacts)}</code></dd>` : ""}
+      ${f.queuedEntry ? `<dt>Queued</dt><dd>${fmt(f.queuedEntry.queued_at)}${f.queuedEntry.notes.length ? " — for " + esc(f.queuedEntry.notes.join(", ")) : ""}</dd>` : ""}
+      ${done && done.warnings && done.warnings.length ? `<dt>Warnings</dt><dd>${esc(done.warnings.join("; "))}</dd>` : ""}
+    </dl>
+    ${done && done.files ? `<ul class="files">${done.files.map(x => `<li>${esc(x)}</li>`).join("")}</ul><pre>output/${esc(f.key)}/</pre>` : ""}`;
+}
+
+function renderQueue() {
+  const keys = Object.keys(data.queue).sort(natural);
+  const el = document.getElementById("queueCard");
+  el.innerHTML = `<h2>Re-export queue</h2>` + (keys.length
+    ? `<ul class="files">${keys.map(k => `<li>${esc(k)}${data.queue[k].notes.length ? ` <span class="meta">(${esc(data.queue[k].notes.join(", "))})</span>` : ""}</li>`).join("")}</ul>
+       <p class="empty" style="margin:10px 0 0">Run this with the tablet plugged in:</p>
+       <pre id="cmd">cd ~/dev/extract_samsung_notes && .venv/bin/python -u export_notes.py --queued</pre>
+       <button class="btn" id="copyCmd" style="margin-top:8px">Copy command</button>`
+    : `<p class="empty">Nothing queued. Switch to Edit mode to queue folders or notes.</p>`);
+}
+
+/* ---------- interactions ---------- */
+async function load() {
+  const r = await fetch("/api/state"); data = await r.json();
+  if (!data.tree) { document.getElementById("tree").innerHTML = `<p class="empty" style="padding:12px">No scan yet: run <code>discovery/crawl.py</code> first.</p>`; return; }
+  render();
+}
+
+async function changeQueue(action, paths, note) {
+  const r = await fetch("/api/queue", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, paths, note }) });
+  const body = await r.json();
+  if (!r.ok) { toast(body.error || "Couldn't save"); return; }
+  data.queue = body.queue; render();
+  toast(action === "add" ? `Queued ${paths.length === 1 ? paths[0] : paths.length + " folders"}` : "Removed from queue");
+}
+
+let toastTimer;
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1800); }
+
+document.getElementById("tree").addEventListener("click", e => {
+  const act = e.target.closest(".act");
+  if (act) { e.stopPropagation(); changeQueue(act.dataset.act, JSON.parse(act.dataset.paths), act.dataset.note); return; }
+  const row = e.target.closest(".row"); if (!row) return;
+  selected = row.dataset.sel;
+  const key = row.dataset.toggle;
+  if (key !== undefined && !query && !filter) { open.has(key) ? open.delete(key) : open.add(key); safeSet("open", JSON.stringify([...open])); }
+  render();
+});
+document.getElementById("chips").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  filter = filter === c.dataset.filter ? null : c.dataset.filter; render();
+});
+document.getElementById("search").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); render(); });
+document.getElementById("expandAll").onclick = () => { allNodes(model).forEach(n => n.kind === "folder" && open.add(n.key)); open.add("__home"); safeSet("open", JSON.stringify([...open])); render(); };
+document.getElementById("collapseAll").onclick = () => { open.clear(); safeSet("open", "[]"); render(); };
+document.getElementById("refresh").onclick = () => load().then(() => toast("Refreshed"));
+document.getElementById("queueCard").addEventListener("click", e => {
+  if (e.target.id !== "copyCmd") return;
+  navigator.clipboard.writeText(document.getElementById("cmd").textContent).then(() => toast("Copied"), () => toast("Copy failed"));
+});
+function setMode(edit) {
+  editing = edit; document.body.classList.toggle("editing", edit);
+  document.getElementById("readBtn").setAttribute("aria-pressed", String(!edit));
+  document.getElementById("editBtn").setAttribute("aria-pressed", String(edit));
+  if (model) render();
+}
+document.getElementById("readBtn").onclick = () => setMode(false);
+document.getElementById("editBtn").onclick = () => setMode(true);
+window.addEventListener("focus", () => data && load());  // pick up new scans/exports when you come back
+load();
+</script>
+</body>
+</html>
