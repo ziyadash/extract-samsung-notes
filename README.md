@@ -75,6 +75,8 @@ tablet before doing anything.
 
 ### The viewer
 
+![The viewer: every Samsung Notes folder with an exported/total count, coloured by export status](docs/viewer.webp)
+
 Every folder and note from the last scan, coloured by status: **exported**, **not exported**,
 **new notes** (exported folder that has gained notes), **queued**, **failed**, **excluded**. Search,
 filter by status, and click anything for details (last export, files, errors). Switch to **Edit** to
