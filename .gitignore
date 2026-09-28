@@ -1,0 +1,14 @@
+# personal data: exported PDFs, manifest, queue, scans of the tablet
+output/
+discovery/tree.json
+discovery/crawl.log
+discovery/dumps/
+discovery/test_pull/
+config.json
+
+# environment / tooling
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+.claude/
